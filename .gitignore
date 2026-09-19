@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *.so
@@ -7,8 +6,6 @@ env/
 venv/
 .venv
 pip-log.txt
-
-# RayzorgenDB data
 *.rdb
 *.wal
 *.pg
@@ -18,19 +15,11 @@ pip-log.txt
 rayzorgen_data/
 test_*
 big_*
-
-# Rust
 rayzorgendb/native/target/
 Cargo.lock
-
-# IDE
 .vscode/
 .idea/
 *.swp
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log

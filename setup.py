@@ -10,15 +10,12 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="RayzorgenDB Contributors",
-    url="https://github.com/yourname/rayzorgendb",
+    url="https://github.com/riza-del/rayzorgendb",
     license="MIT",
-    packages=find_packages(
-        exclude=["tests*", "examples*", "rayzorgendb.native*"]
-    ),
+    packages=find_packages(exclude=["tests*", "examples*", "rayzorgendb.native*"]),
     python_requires=">=3.8",
     classifiers=[
         "Development Status :: 4 - Beta",
-        "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Topic :: Database",

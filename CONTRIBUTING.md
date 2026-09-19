@@ -1,41 +1,27 @@
 # Contributing to RayzorgenDB
 
-Terima kasih atas minat kontribusi!
+Thank you for your interest.
 
-## Cara Kontribusi
+## How to Contribute
 
-1. Fork repository
-2. Buat branch: git checkout -b fitur-baru
-3. Commit: git commit -am "Tambah fitur X"
-4. Push: git push origin fitur-baru
-5. Buat Pull Request
+1. Fork the repository
+2. Create a branch
+3. Commit changes
+4. Push to branch
+5. Open a Pull Request
 
-## Standar Kode
+## Code Standards
 
-- Python 3.8+
-- Tanpa dependensi eksternal (wajib)
-- Style: snake_case untuk fungsi, PascalCase untuk class
-- Baris maks 72 karakter
-- Komentar dalam Bahasa Inggris
+- Python 3.8 or newer
+- No external dependencies
+- snake_case for functions, PascalCase for classes
+- Max line length: 72 characters
+- Comments in English
 
-## Test
-
-Semua perubahan harus lolos test:
+## Testing
 
     python -m unittest discover tests
 
-## Laporkan Bug
+## License
 
-Buka issue dengan:
-- Langkah reproduksi
-- Output yang diharapkan
-- Output aktual
-- Python version + OS
-
-## Fitur Baru
-
-Diskusikan dulu di issue sebelum implementasi besar.
-
-## Lisensi
-
-Dengan berkontribusi, kamu setuju lisensi MIT.
+By contributing, you agree to the MIT License.
