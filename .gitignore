@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.venv
+pip-log.txt
+
+# RayzorgenDB data
+*.rdb
+*.wal
+*.pg
+*.db
+*.db-wal
+*.db-shm
+rayzorgen_data/
+test_*
+big_*
+
+# Rust
+rayzorgendb/native/target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
