@@ -149,6 +149,11 @@ class WAL:
         with self._lock:
             if self._file:
                 try:
+                    self._file.flush()
+                    os.fsync(self._file.fileno())
+                except (IOError, OSError):
+                    pass
+                try:
                     self._file.close()
                 except Exception:
                     pass

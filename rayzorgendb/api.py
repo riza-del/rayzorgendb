@@ -592,6 +592,12 @@ class RayzorgenDB:
         self.config = config or DEFAULT_CONFIG
         self.core = RayzorgenCore(self.config)
         self._handles: Dict[str, Collection] = {}
+        # Smart layer (unified advanced API)
+        try:
+            from rayzorgendb.smart import Smart
+            self.smart = Smart(self)
+        except Exception:
+            self.smart = None
 
     # --------------------------------------------------------
     # Collections
