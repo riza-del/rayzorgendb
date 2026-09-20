@@ -642,10 +642,21 @@ class RayzorgenCore:
 
     def find_prefix(self, collection: str, field: str,
                     prefix: str) -> List[Record]:
+        # Coba pakai index dulu
         ids = self.indexes.search_prefix(
             collection, field, prefix
         )
-        return self.get_many(collection, ids)
+        if ids:
+            return self.get_many(collection, ids)
+
+        # Fallback: scan manual kalau index tidak ada
+        p = str(prefix)
+        results = []
+        for rid, raw in self._data.get(collection, {}).items():
+            v = raw.get("data", {}).get(field)
+            if v is not None and str(v).startswith(p):
+                results.append(Record.from_dict(raw))
+        return results
 
     # --------------------------------------------------------
     # Full-Text Search
