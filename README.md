@@ -2,52 +2,47 @@
 
 Embedded database engine. Pure Python. Zero dependencies.
 
-RayzorgenDB is a self-contained database that runs wherever Python runs. No server, no cloud, no external packages. Import the library and use it.
+A self-contained database that runs wherever Python runs. No server process. No external packages. No configuration files.
 
-## Design Goals
+## Overview
 
-- Portability - Runs on any platform with Python 3.8 or newer
-- Simplicity - No configuration files, no server processes, no setup
-- Self-containment - Zero external dependencies
-- Multi-model support - Document, key-value, vector, relational, time-series in one engine
+RayzorgenDB provides a complete storage and query engine inside a single Python package. It combines multiple data models, query interfaces, and advanced features without requiring any external services or dependencies.
 
-## Core Capabilities
+Supported Python versions: 3.8 and newer.
+
+## Feature Summary
 
 ### Storage Engine
-
 - Custom binary format with varint encoding
-- Write-Ahead Log for crash recovery
+- Write-Ahead Log with automatic crash recovery
 - zlib compression (approximately 82 percent size reduction)
 - CRC32 checksum verification
-- Paged disk storage for datasets larger than RAM
+- Paged disk storage supporting datasets larger than RAM
 - Atomic writes with configurable fsync policy
 
 ### Query Layer
-
-- Native SQL parser (hand-written, approximately 1,400 lines)
+- Native SQL parser, hand-written, approximately 1,400 lines
 - Chainable Python query builder
-- Cost-based optimizer with statistics
-- EXPLAIN and ANALYZE for query planning
-- Full-text search
+- Cost-based optimizer with statistics collection
+- EXPLAIN and ANALYZE for query plan inspection
+- Full-text search across all fields
 - Aggregations: SUM, AVG, MIN, MAX, COUNT
 - GROUP BY, HAVING, DISTINCT
 
 ### Indexing
-
 - Hash indexes for equality lookups
 - B+ Tree indexes for range queries
 - Prefix search
-- Automatic index selection by the optimizer
+- Automatic index selection by the query optimizer
 - Bulk loading for fast rebuilds
 
 ### Relational Operations
-
 - INNER, LEFT, RIGHT JOIN
 - Multi-collection join chains
 - Nested field access
 - Filter on join results
 
-## Advanced Features
+## Advanced Capabilities
 
 ### Multi-Writer DAG Storage
 
@@ -55,8 +50,10 @@ Every write becomes a node in a directed acyclic graph. Multiple writers append 
 
     b1 = db.smart.branch("writer_a")
     b2 = db.smart.branch("writer_b")
+
     db.smart.write_branch(b1, "insert", "users", "u1", {"name": "A"})
     db.smart.write_branch(b2, "insert", "orders", "o1", {"total": 500})
+
     tips = [db.smart.graph.tip(b1), db.smart.graph.tip(b2)]
     db.smart.merge_branches(tips)
 
@@ -65,11 +62,13 @@ Every write becomes a node in a directed acyclic graph. Multiple writers append 
 Standard queries return binary match results. RayzorgenDB additionally supports weighted scoring, returning ranked results.
 
     from rayzorgendb.smart import Condition
+
     conditions = [
         Condition("age", "between", [24, 30], weight=0.5),
         Condition("city", "eq", "Jakarta", weight=0.3),
         Condition("active", "eq", True, weight=0.2),
     ]
+
     results = db.smart.score("users", conditions).all(limit=10)
 
 ### Reactive Fields
@@ -93,7 +92,7 @@ Every version of every record is preserved.
 
 ### Vector Search
 
-HNSW index for approximate nearest neighbor search with logarithmic complexity. Optional Rust acceleration for a 5 to 20 times speedup.
+HNSW index for approximate nearest neighbor search with logarithmic complexity. Optional native acceleration is available.
 
     docs.build_hnsw_index(dim=128)
     docs.vector_search_hnsw([0.9, 0.1, 0.0], top_k=5)
@@ -108,7 +107,7 @@ Column-oriented storage for fast aggregation on large datasets.
 
 ### Hybrid Search
 
-Combine BM25 keyword matching with vector semantic similarity.
+BM25 keyword matching combined with vector semantic similarity.
 
     docs.build_hybrid_index(text_field="title")
     docs.hybrid_search(query="python", query_vector=[0.9, 0.1], top_k=5)
@@ -129,9 +128,9 @@ Timestamped metrics with retention policies and downsampling.
 
 ### Distributed Features
 
-- Replication - Primary-replica synchronization over socket
-- Sharding - Hash-based distribution across multiple folders
-- Multi-Writer - Optimistic locking with compare-and-swap
+- Replication: primary-replica synchronization over socket
+- Sharding: hash-based distribution across multiple data directories
+- Multi-Writer: optimistic locking with compare-and-swap
 
 ## Transactions and Concurrency
 
@@ -146,7 +145,7 @@ Timestamped metrics with retention policies and downsampling.
 
 - XOR stream cipher with HMAC-SHA256 authentication
 - PBKDF2 password hashing with 100,000 iterations
-- HTTP token authentication with role-based access
+- HTTP token authentication with role-based access control
 - Integrity verification
 
 ## Observability
@@ -154,7 +153,7 @@ Timestamped metrics with retention policies and downsampling.
 - Structured JSON logging
 - Query history
 - Slow query log
-- Metrics collector with p50, p95, and p99 latencies
+- Metrics collector reporting p50, p95, and p99 latencies
 - Safety report with RAM estimates
 
 ## Interfaces
@@ -164,26 +163,28 @@ Timestamped metrics with retention policies and downsampling.
 - HTTP REST API
 - Interactive shell with password authentication
 - Command-line interface
-- Async wrapper for bot frameworks
+- Async wrapper for bot and web frameworks
 
 ## Installation
 
-Copy folder:
+Copy the package into a project directory:
 
     cp -r rayzorgendb /path/to/project/
 
-Install from source:
+Or install from source:
 
     git clone https://github.com/riza-del/rayzorgendb.git
     cd rayzorgendb
     pip install -e .
 
-Requirements: Python 3.8 or newer. No pip packages. No system libraries.
+Requirements: Python 3.8 or newer. No third-party packages required.
 
-Optional Rust acceleration:
+Optional native acceleration:
 
     cd rayzorgendb/native
     cargo build --release
+
+The native library is detected automatically when present. Otherwise, the pure Python implementation is used.
 
 ## Usage
 
@@ -230,7 +231,11 @@ Operators: eq, ne, gt, lt, gte, lte, in, nin, contains, icontains, startswith, e
 
 ## HTTP REST API
 
+Start the server:
+
     python -m rayzorgendb.http.server
+
+Example requests:
 
     curl http://localhost:9000/health
     curl -X POST http://localhost:9000/users -H "Content-Type: application/json" -d '{"name": "Budi", "age": 25}'
@@ -277,7 +282,7 @@ Additional metrics:
                             |
                 Disk (.rdb + .wal)
 
-The Smart layer (db.smart) provides a unified advanced interface: DAG branching, scored queries, reactive links, simple verbs.
+The Smart layer (db.smart) provides a unified advanced interface: DAG branching, scored queries, reactive links, and simple verbs.
 
 ## Limitations
 
@@ -286,7 +291,7 @@ The Smart layer (db.smart) provides a unified advanced interface: DAG branching,
 - No network-native clustering
 - Encryption uses XOR with HMAC, not AES
 
-For high-concurrency server workloads or terabyte-scale datasets, use a database system designed for that scale.
+For high-concurrency server workloads or terabyte-scale datasets, a database system designed for that scale is required.
 
 ## Testing
 
