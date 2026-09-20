@@ -1134,13 +1134,6 @@ class RayzorgenDB:
         )
         return plan.explain()
 
-class TimeSnapshot:
-    """Snapshot of a collection at a specific time."""
-
-    def __init__(self, core, collection: str, timestamp: float):
-        self.core = core
-        self.collection = collection
-        self.timestamp = timestamp
 
     def all(self) -> List[Dict]:
         """All records visible at this time."""
@@ -1163,6 +1156,14 @@ class TimeSnapshot:
         return self.core.timetravel.changes_between(
             self.collection, ts_other, self.timestamp
         )
+
+class TimeSnapshot:
+    """Snapshot of a collection at a specific time."""
+
+    def __init__(self, core, collection: str, timestamp: float):
+        self.core = core
+        self.collection = collection
+        self.timestamp = timestamp
 
     def __repr__(self):
         return "<TimeSnapshot {} at {}>".format(
