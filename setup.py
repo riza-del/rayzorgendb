@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 setup(
     name="rayzorgendb",
     version="1.0.0",
-    description="Embedded multi-engine database. Zero dependency.",
+    description="Embedded local database. Instant, clean, ready to use.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="RayzorgenDB Contributors",

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rayzorgendb"
 version = "1.0.0"
-description = "Embedded multi-engine database. Zero dependency."
+description = "Embedded local database. Instant, clean, ready to use."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"

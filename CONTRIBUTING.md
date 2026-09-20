@@ -6,8 +6,8 @@ Thank you for your interest.
 
 1. Fork the repository
 2. Create a branch
-3. Commit changes
-4. Push to branch
+3. Commit your changes
+4. Push to the branch
 5. Open a Pull Request
 
 ## Code Standards
@@ -15,7 +15,7 @@ Thank you for your interest.
 - Python 3.8 or newer
 - No external dependencies
 - snake_case for functions, PascalCase for classes
-- Max line length: 72 characters
+- Maximum line length: 72 characters
 - Comments in English
 
 ## Testing

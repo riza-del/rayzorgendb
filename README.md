@@ -1,12 +1,17 @@
 # RayzorgenDB
 
-A complete embedded database engine. Pure Python. Zero dependencies.
+Embedded local database. Instant, clean, ready to use.
 
-Import it. Use it. No server. No cloud. No API key.
+Forget the complexity of managing a database server, the overhead of cloud configuration, or the burden of dependency installation.
 
-## Overview
+RayzorgenDB is a Python-based data storage solution engineered for maximum efficiency. Import it into your code and the database operates autonomously on your local device.
 
-RayzorgenDB is a self-contained database engine written entirely in pure Python. It combines multiple storage models, query interfaces, and advanced features into a single package with zero external dependencies.
+## Core Advantages
+
+- **Instant Deployment** - No setup time. Integrate directly into your code without initial configuration.
+- **Standalone Architecture** - Runs entirely on local hardware. No external services, no centralized servers, no internet connection required.
+- **Lightweight and Clean** - Built with Python for optimal performance. Keeps your project free from bloatware.
+- **Built for Developers** - Designed for those who want to focus purely on application logic, not infrastructure.
 
 ## Features
 
@@ -14,7 +19,7 @@ RayzorgenDB is a self-contained database engine written entirely in pure Python.
 - Custom binary format with varint encoding
 - Write-Ahead Log with crash recovery
 - zlib compression (82 percent size reduction)
-- CRC32 checksum
+- CRC32 checksum verification
 - Paged disk storage
 
 ### Query
@@ -23,37 +28,37 @@ RayzorgenDB is a self-contained database engine written entirely in pure Python.
 - Cost-based optimizer
 - EXPLAIN and ANALYZE
 - Full-text search
-- SUM, AVG, MIN, MAX, COUNT
+- Aggregations: SUM, AVG, MIN, MAX, COUNT
 - GROUP BY, HAVING, DISTINCT
 
 ### Indexes
-- Hash indexes
-- B plus Tree indexes
+- Hash indexes for equality lookups
+- B+ Tree indexes for range queries
 - Prefix search
-- Automatic selection
+- Automatic index selection
 
 ### Relational
 - INNER, LEFT, RIGHT JOIN
 - Multi-collection chains
-- Nested fields
+- Nested field access
 
 ### Time Travel
-- Full history per record
+- Full version history per record
 - Point-in-time snapshots
-- Diff between versions
-- Restore to any version
+- Version diff
+- Restore to any previous version
 
 ### Vector Search
-- HNSW index, O(log n)
-- Cosine and Euclidean
+- HNSW index with O(log n) complexity
+- Cosine and Euclidean distance
 - Optional Rust acceleration
 
 ### Analytics
 - Columnar engine
 - Hybrid search (BM25 plus vector)
-- Time-series
+- Time-series storage
 
-### CDC
+### Change Data Capture
 - Real-time event stream
 - Filters and replay
 
@@ -65,7 +70,7 @@ RayzorgenDB is a self-contained database engine written entirely in pure Python.
 ### Concurrency
 - Multi-writer with optimistic locking
 - Compare-and-swap
-- Per-record locks
+- Per-record write locks
 
 ### Distribution
 - Replication
@@ -75,19 +80,19 @@ RayzorgenDB is a self-contained database engine written entirely in pure Python.
 ### Security
 - XOR cipher with HMAC-SHA256
 - PBKDF2 password hashing
-- HTTP token auth
+- HTTP token authentication
 
 ### Interfaces
 - Python API
 - SQL
 - HTTP REST API
 - Interactive shell
-- CLI
+- Command-line interface
 - Async wrapper
 
 ## Installation
 
-Copy folder:
+Copy the folder:
 
     cp -r rayzorgendb /path/to/project/
 
@@ -149,7 +154,7 @@ Time Travel:
 Vector Search:
 
     docs = db.collection("docs")
-    docs.insert({"text": "Python tutorial", "_vector": [0.9, 0.1, 0.0]})
+    docs.insert({"title": "Python tutorial", "_vector": [0.9, 0.1, 0.0]})
     docs.build_hnsw_index(dim=3)
     docs.vector_search_hnsw([1.0, 0.0, 0.0], top_k=5)
 
@@ -194,26 +199,26 @@ Async API:
 
 ## Performance (YCSB)
 
-Tested on Android Termux, Python 3.11, 1000 records, 500 ops per workload.
+Tested on Android Termux, Python 3.11, 1000 records loaded, 500 operations per workload.
 
 - Workload C (100 percent read): 60,166 ops per second
 - Workload B (95 percent read, 5 percent update): 14,240 ops per second
 - Workload D (95 percent read, 5 percent insert): 13,859 ops per second
 - Workload A (50 percent read, 50 percent update): 1,656 ops per second
 
-Other metrics:
+Additional metrics:
 
-- Insert (batch): 8,000 to 15,000 records per second
-- Compression: 82 percent
+- Insert (batch mode): 8,000 to 15,000 records per second
+- Compression ratio: 82 percent
 - Storage per record: 40 bytes
 - RAM per record (large mode): 200 bytes
-- Max records (RAM 4 GB): 1,000,000
+- Maximum records (RAM 4 GB): 1,000,000
 
 ## Testing
 
     python -m unittest discover tests
 
-200 plus automated tests.
+200+ automated tests.
 
 ## License
 
