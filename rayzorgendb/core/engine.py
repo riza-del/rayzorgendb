@@ -408,6 +408,15 @@ class RayzorgenCore:
             "id": record.id,
             "data": record.data,
         })
+        # === TIME TRAVEL: rekam versi awal ===
+        if not self._batch_mode and not self._is_large:
+            try:
+                self.timetravel.record_version(
+                    collection, record.id, record.data,
+                    version=1, deleted=False,
+                )
+            except Exception:
+                pass
         if getattr(self, "cdc_stream", None):
             self.cdc_stream.emit(
                 "insert", collection, record.id,

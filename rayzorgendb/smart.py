@@ -311,8 +311,11 @@ class Smart:
 
     def __init__(self, db):
         self._db = db
-        self._graph = _Graph()
-        self._reactive = _Reactive(db)
+        self.graph = _Graph()
+        self.reactive = _Reactive(db)
+        # Self-aliases for convenience
+        self.brain = self
+        self.scored = self
         self._started_at = time.time()
         self._log: List[Dict] = []
         self._lock = threading.RLock()
@@ -369,7 +372,7 @@ class Smart:
             for r in records:
                 d = r.to_dict() if hasattr(r, "to_dict") else r
                 try:
-                    extra = self._reactive.values_for(box, d)
+                    extra = self.reactive.values_for(box, d)
                     if extra:
                         d.setdefault("data", {}).update(extra)
                 except Exception:
@@ -470,28 +473,28 @@ class Smart:
              compute: Callable,
              match_on: str = "id") -> _ReactiveLink:
         """Create reactive link between two boxes."""
-        return self._reactive.link(
+        return self.reactive.link(
             source, target, compute, match_on
         )
 
     def branch(self, name: str = None) -> str:
         """Open a new writer branch."""
-        return self._graph.open(name)
+        return self.graph.open(name)
 
     def write_branch(self, branch: str, op: str,
                      box: str, record_id: str,
                      data: Any = None) -> _DAGNode:
         """Write to a specific branch."""
-        return self._graph.write(
+        return self.graph.write(
             branch, op, box, record_id, data
         )
 
     def merge_branches(self, node_ids: List[str]) -> _DAGNode:
         """Merge multiple branches."""
-        return self._graph.merge(node_ids)
+        return self.graph.merge(node_ids)
 
     def graph_stats(self) -> Dict:
-        return self._graph.stats()
+        return self.graph.stats()
 
     # --------------------------------------------------------
     # Self-awareness

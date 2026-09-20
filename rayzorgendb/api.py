@@ -655,9 +655,10 @@ class RayzorgenDB:
     def cdc(self):
         """Get CDC stream."""
         from rayzorgendb.cdc import CDCStream
-        if not hasattr(self.core, "_cdc"):
-            self.core._cdc = CDCStream()
-        return self.core._cdc
+        if not hasattr(self.core, "cdc_stream") or \
+           self.core.cdc_stream is None:
+            self.core.cdc_stream = CDCStream()
+        return self.core.cdc_stream
 
     def on_change(self, callback, collection: str = None,
                    op: str = None):
@@ -1169,6 +1170,42 @@ class TimeSnapshot:
         return "<TimeSnapshot {} at {}>".format(
             self.collection, self.timestamp
         )
+
+    def all(self) -> List[Dict]:
+        """All records visible at this time."""
+        return self.core.timetravel.snapshot_at(
+            self.collection, self.timestamp
+        )
+
+    def get(self, record_id: str) -> Optional[Dict]:
+        """One record visible at this time."""
+        return self.core.timetravel.at(
+            self.collection, record_id, self.timestamp
+        )
+
+    def count(self) -> int:
+        """How many records visible at this time."""
+        return len(self.all())
+
+    def changes_since(self, other_timestamp) -> List[Dict]:
+        """Changes between other_timestamp and this timestamp."""
+        ts_other = _parse_timestamp(other_timestamp)
+        return self.core.timetravel.changes_between(
+            self.collection, ts_other, self.timestamp
+        )
+
+    def predict(self, key: str) -> Dict:
+        """Predictive placeholder for time travel."""
+        return {
+            "at": self.timestamp,
+            "predict": key,
+            "note": "prediction placeholder",
+        }
+
+    def snapshot(self) -> List[Dict]:
+        """Alias for all()."""
+        return self.all()
+
 
 
 def _parse_timestamp(value) -> float:

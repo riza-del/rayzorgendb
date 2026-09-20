@@ -21,8 +21,19 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 def tokenize(text: str) -> List[str]:
-    """Lowercase + split on non-alphanumeric."""
-    return re.findall(r"[a-z0-9]+", text.lower())
+    """
+    Lowercase, split on non-alphanumeric,
+    and split letter/digit boundaries.
+    Example: "Doc0" -> ["doc", "0"]
+    """
+    text = text.lower()
+    # Split on non-alphanumeric first
+    parts = re.findall(r"[a-z0-9]+", text)
+    # Then split letter/digit boundaries
+    tokens = []
+    for p in parts:
+        tokens.extend(re.findall(r"[a-z]+|[0-9]+", p))
+    return tokens
 
 
 class BM25:
