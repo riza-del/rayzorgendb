@@ -1,22 +1,74 @@
 #!/usr/bin/env python3
 """
-RayzorgenDB Shell — Extended
-
-Interactive shell dengan semua fitur RayzorgenDB.
+RayzorgenDB Shell
+Interactive shell with password login.
 """
 
 import sys
 import os
 import json
 import time
+import getpass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rayzorgendb import RayzorgenDB, Config
+from rayzorgendb.shell_auth import (
+    is_first_time, create_account, login,
+    change_password, reset,
+)
+
+
+VERSION = "1.0.0"
 
 
 # ============================================================
-# TABLE PRINTER
+# UI Helpers
+# ============================================================
+
+def clear():
+    os.system("clear" if os.name != "nt" else "cls")
+
+
+def print_banner():
+    print()
+    print("                     RayzorgenDB")
+    print("           Embedded Multi-Engine Database")
+    print("                     v" + VERSION)
+
+
+def print_welcome():
+    print()
+    print_banner()
+    print()
+    print("  Ketik 'help' untuk melihat perintah.")
+    print("  Ketik 'exit' untuk keluar.")
+    print()
+
+
+def print_setup():
+    print()
+    print_banner()
+    print()
+    print("  Pertama kali dijalankan.")
+    print("  Buat password untuk mengunci shell ini.")
+    print()
+
+
+def print_login():
+    print()
+    print_banner()
+    print()
+
+
+def print_goodbye():
+    print()
+    print("  Sampai jumpa.")
+    print()
+
+
+# ============================================================
+# Table Printer
 # ============================================================
 
 def print_table(rows, headers=None, max_width=30):
@@ -37,16 +89,10 @@ def print_table(rows, headers=None, max_width=30):
             return "-"
         if isinstance(v, bool):
             return "true" if v else "false"
-        if isinstance(v, (list, dict)):
-            s = json.dumps(v, ensure_ascii=False)
-        else:
-            s = str(v)
-        if len(s) > max_width:
-            s = s[:max_width - 3] + "..."
-        return s
+        s = json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else str(v)
+        return s[:max_width - 3] + "..." if len(s) > max_width else s
 
     table = [[fmt(r.get(h, "")) for h in headers] for r in rows]
-
     widths = []
     for i, h in enumerate(headers):
         w = len(str(h))
@@ -57,9 +103,9 @@ def print_table(rows, headers=None, max_width=30):
     def line():
         return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
 
-    def fmt_row(values):
+    def fmt_row(vals):
         return "| " + " | ".join(
-            str(v).ljust(widths[i]) for i, v in enumerate(values)
+            str(v).ljust(widths[i]) for i, v in enumerate(vals)
         ) + " |"
 
     print(line())
@@ -86,111 +132,170 @@ def records_to_rows(records):
 
 
 # ============================================================
-# HELP
+# Help
 # ============================================================
 
 def print_help():
     print("""
-==============================================================
-        RayzorgenDB Shell — Extended
-==============================================================
+                    RayzorgenDB Shell
 
 COLLECTIONS
-  create <name>              bikin koleksi
-  drop <name>                hapus koleksi
-  collections                daftar koleksi
+create <name>              Create collection
+drop <name>                Drop collection
+collections                List collections
 
 DATA
-  insert <col> <data>        tambah 1 data
-  insertmany <col> <json>    tambah banyak (JSON array)
-  show <col>                 tampilkan semua
-  get <col> <id>             ambil 1
-  update <col> <id> <data>   ubah
-  remove <col> <id>          hapus
-  count <col>                hitung
+insert <col> <data>        Add record
+insertmany <col> <json>    Add many (JSON)
+show <col>                 Show all
+get <col> <id>             Get by ID
+update <col> <id> <data>   Update record
+remove <col> <id>          Delete record
+count <col>                Count records
 
 QUERY
-  filter <col> <field> <op> <value>
-    op: eq, ne, gt, lt, gte, lte, contains, between
-  sort <col> <field> [desc]
-  search <col> <keyword>     full-text search
-  avg <col> <field>
-  sum <col> <field>
-  min <col> <field>
-  max <col> <field>
-  group <col> <field>
-  distinct <col> <field>
+filter <col> <field> <op> <value>
+sort <col> <field> [desc]
+search <col> <keyword>
+avg <col> <field>
+sum <col> <field>
+min <col> <field>
+max <col> <field>
+group <col> <field>
+distinct <col> <field>
 
 INDEX
-  index <col> <field>        bikin hash index
-  sorted-index <col> <field> bikin B+ Tree
-  indexes <col>              daftar index
-  drop-index <col> <field>   hapus index
-  range <col> <field> <a> <b>
+index <col> <field>
+sorted-index <col> <field>
+indexes <col>
+drop-index <col> <field>
+range <col> <field> <a> <b>
 
 TIME TRAVEL
-  history <col> <id>         semua versi
-  at <col> <timestamp>       snapshot waktu
-  diff <col> <id> <v1> <v2>  bandingkan versi
-  restore <col> <id> <v>     balik ke versi
+history <col> <id>
+at <col> <timestamp>
+diff <col> <id> <v1> <v2>
+restore <col> <id> <v>
 
 JOIN
-  join <col1> <col2> <k1> <k2> [inner|left|right]
+join <col1> <col2> <k1> <k2> [inner|left|right]
 
 SQL
-  sql <query>                jalankan SQL
-  explain <sql>              lihat execution plan
-  analyze <col>              analisis optimasi
+sql <query>
+explain <sql>
+analyze <col>
 
 I/O
-  export <col> json [file]   export JSON
-  export <col> csv [file]    export CSV
-  import <col> <json-array>  import JSON
-  backup <dir>               backup semua
-  snapshot                   force snapshot
+export <col> json [file]
+export <col> csv [file]
+import <col> <json-array>
+backup <dir>
+snapshot
 
 MONITOR
-  status                     statistik database
-  stats                      statistik lengkap
-  metrics                    performance metrics
-  query-history              riwayat query
-  slow                       query lambat
+status
+metrics
+query-history
 
-CDC & TIMESERIES
-  cdc                        lihat change events
-  ts-write <metric> <value>  tulis time-series
-  ts-avg <metric> [last]     rata-rata
-  ts-query <metric> [last]   query points
+CDC & TIME-SERIES
+cdc
+ts-write <metric> <value>
+ts-avg <metric> [last]
+ts-query <metric> [last]
+
+ACCOUNT
+changepw                   Change password
+logout                     Logout and exit
 
 SYSTEM
-  clear                      hapus semua data
-  help                       tampilkan bantuan ini
-  exit                       keluar
+clear                      Delete all data
+help                       Show help
+exit                       Quit
 
-==============================================================
 """)
 
 
 # ============================================================
-# PARSERS
+# Setup Wizard / Login
+# ============================================================
+
+def run_setup() -> bool:
+    """First-time: create password."""
+    clear()
+    print_setup()
+
+    for attempt in range(3):
+        try:
+            pw = getpass.getpass("  Buat password: ")
+            confirm = getpass.getpass("  Ulangi password: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+
+        if len(pw) < 4:
+            print("  [!] Minimal 4 karakter.")
+            continue
+        if pw != confirm:
+            print("  [!] Password tidak cocok.")
+            continue
+
+        if create_account(pw):
+            print()
+            print("  [OK] Password tersimpan.")
+            print("       Jalankan lagi untuk login.")
+            print()
+            return False  # keluar setelah setup
+        else:
+            print("  [!] Gagal.")
+            return False
+
+    print("  [!] Terlalu banyak percobaan.")
+    return False
+
+
+def run_login() -> bool:
+    """Existing account: ask password."""
+    clear()
+    print_login()
+
+    for attempt in range(3):
+        try:
+            pw = getpass.getpass("  Password: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+
+        if login(pw):
+            print()
+            print("  [OK] Login berhasil.")
+            time.sleep(0.4)
+            return True
+        else:
+            remaining = 2 - attempt
+            print("  [!] Password salah." +
+                (" Sisa: " + str(remaining) if remaining > 0 else ""))
+            print()
+
+    print("  [!] Terlalu banyak percobaan.")
+    return False
+
+
+# ============================================================
+# Parsers
 # ============================================================
 
 def parse_data(s):
-    """Parse JSON atau key=value."""
     s = s.strip()
     if s.startswith("{") or s.startswith("["):
         try:
             return json.loads(s)
         except json.JSONDecodeError:
             pass
-
     result = {}
     for part in s.split(","):
         if "=" in part:
             k, v = part.split("=", 1)
-            k = k.strip()
-            v = v.strip()
-            result[k] = auto_cast(v)
+            result[k.strip()] = auto_cast(v.strip())
     return result if result else None
 
 
@@ -211,766 +316,557 @@ def auto_cast(v):
 
 
 # ============================================================
-# COMMANDS: COLLECTIONS
+# Commands
 # ============================================================
 
-def cmd_create(db, args):
-    if not args:
-        print("Usage: create <name>")
+def cmd_create(db, a):
+    if not a:
+        print("  Usage: create <name>")
         return
-    db.collection(args[0])
-    print("Koleksi '" + args[0] + "' dibuat.")
+    db.collection(a[0])
+    print("  Koleksi '" + a[0] + "' dibuat.")
 
 
-def cmd_drop(db, args):
-    if not args:
-        print("Usage: drop <name>")
+def cmd_drop(db, a):
+    if not a:
+        print("  Usage: drop <name>")
         return
-    if db.drop_collection(args[0]):
-        print("Koleksi '" + args[0] + "' dihapus.")
-    else:
-        print("Koleksi tidak ditemukan.")
+    print("  Dihapus." if db.drop_collection(a[0]) else "  Tidak ada.")
 
 
-def cmd_collections(db, args):
+def cmd_collections(db, a):
     cols = db.collections()
     if not cols:
-        print("  (belum ada koleksi)")
+        print("  (belum ada)")
         return
-    rows = [
-        {"nama": c, "jumlah": db.collection(c).count()}
-        for c in cols
-    ]
+    rows = [{"nama": c, "jumlah": db.collection(c).count()} for c in cols]
     print_table(rows, headers=["nama", "jumlah"])
 
 
-# ============================================================
-# COMMANDS: DATA
-# ============================================================
-
-def cmd_insert(db, args):
-    if len(args) < 2:
-        print("Usage: insert <col> <data>")
-        print("  Contoh: insert users nama=Budi,umur=25")
-        print("  Atau  : insert users {\"nama\":\"Budi\",\"umur\":25}")
+def cmd_insert(db, a):
+    if len(a) < 2:
+        print("  Usage: insert <col> <data>")
         return
-    coll = args[0]
-    data = parse_data(" ".join(args[1:]))
+    data = parse_data(a[1])
     if not isinstance(data, dict):
-        print("Data harus dict.")
+        print("  Data harus dict.")
         return
-    rec = db.collection(coll).insert(data)
-    print("Ditambah ke '" + coll + "' (id: " + rec.id[:8] + ")")
+    rec = db.collection(a[0]).insert(data)
+    print("  Ditambah (id: " + rec.id[:8] + ")")
 
 
-def cmd_insertmany(db, args):
-    if len(args) < 2:
-        print("Usage: insertmany <col> <json-array>")
-        print('  Contoh: insertmany users [{"nama":"A"},{"nama":"B"}]')
+def cmd_insertmany(db, a):
+    if len(a) < 2:
+        print("  Usage: insertmany <col> <json-array>")
         return
-    coll = args[0]
-    raw = " ".join(args[1:])
     try:
-        items = json.loads(raw)
+        items = json.loads(a[1])
     except json.JSONDecodeError as e:
-        print("JSON salah: " + str(e))
+        print("  JSON salah: " + str(e))
         return
     if not isinstance(items, list):
-        print("Harus array.")
+        print("  Harus array.")
         return
     db.begin_batch()
-    count = 0
     for item in items:
-        db.collection(coll).insert(item)
-        count += 1
+        db.collection(a[0]).insert(item)
     db.end_batch()
-    print("Ditambah " + str(count) + " data ke '" + coll + "'.")
+    print("  Ditambah " + str(len(items)) + " data.")
 
 
-def cmd_show(db, args):
-    if not args:
-        print("Usage: show <col>")
+def cmd_show(db, a):
+    if not a:
+        print("  Usage: show <col>")
         return
-    coll = args[0]
-    if not db.has_collection(coll):
-        print("Koleksi '" + coll + "' tidak ada.")
+    if not db.has_collection(a[0]):
+        print("  Tidak ada.")
         return
-    records = db.collection(coll).all()
+    records = db.collection(a[0]).all()
     if not records:
-        print("Koleksi kosong.")
+        print("  Kosong.")
         return
-    rows = records_to_rows(records)
-    print(str(len(records)) + " record di '" + coll + "':")
-    print()
-    print_table(rows)
+    print("  " + str(len(records)) + " record:")
+    print_table(records_to_rows(records))
 
 
-def cmd_get(db, args):
-    if len(args) < 2:
-        print("Usage: get <col> <id>")
+def cmd_get(db, a):
+    if len(a) < 2:
+        print("  Usage: get <col> <id>")
         return
-    coll, rid = args[0], args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    rec = db.collection(coll).get(rid)
+    rec = db.collection(a[0]).get(a[1])
     if not rec:
-        print("Record tidak ditemukan.")
+        print("  Tidak ditemukan.")
         return
     row = {"id": rec.id[:8]}
     row.update(rec.data)
     print_table([row], headers=["id"] + list(rec.data.keys()))
 
 
-def cmd_update(db, args):
-    if len(args) < 3:
-        print("Usage: update <col> <id> <data>")
+def cmd_update(db, a):
+    if len(a) < 3:
+        print("  Usage: update <col> <id> <data>")
         return
-    coll, rid = args[0], args[1]
-    data = parse_data(" ".join(args[2:]))
-    if not isinstance(data, dict):
-        print("Data harus dict.")
-        return
-    rec = db.collection(coll).update(rid, data)
+    data = parse_data(a[2])
+    rec = db.collection(a[0]).update(a[1], data)
     if not rec:
-        print("Record tidak ditemukan.")
+        print("  Tidak ditemukan.")
         return
-    row = {"id": rec.id[:8]}
-    row.update(rec.data)
-    print("Diubah:")
-    print_table([row], headers=["id"] + list(rec.data.keys()))
+    print("  Diubah: " + str(rec.data))
 
 
-def cmd_remove(db, args):
-    if len(args) < 2:
-        print("Usage: remove <col> <id>")
+def cmd_remove(db, a):
+    if len(a) < 2:
+        print("  Usage: remove <col> <id>")
         return
-    if db.collection(args[0]).delete(args[1]):
-        print("Record dihapus.")
-    else:
-        print("Record tidak ditemukan.")
+    print("  Dihapus." if db.collection(a[0]).delete(a[1]) else "  Tidak ada.")
 
 
-def cmd_count(db, args):
-    if not args:
-        print("Usage: count <col>")
+def cmd_count(db, a):
+    if not a:
+        print("  Usage: count <col>")
         return
-    if not db.has_collection(args[0]):
-        print("Koleksi tidak ada.")
+    if not db.has_collection(a[0]):
+        print("  Tidak ada.")
         return
-    n = db.collection(args[0]).count()
-    print_table([{"koleksi": args[0], "jumlah": n}],
-                headers=["koleksi", "jumlah"])
-
-
-# ============================================================
-# COMMANDS: QUERY
-# ============================================================
-
-def cmd_filter(db, args):
-    if len(args) < 4:
-        print("Usage: filter <col> <field> <op> <value>")
-        return
-    coll, field, op = args[0], args[1], args[2]
-    value = auto_cast(" ".join(args[3:]))
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    try:
-        q = db.collection(coll).query().where(field, op, value)
-        result = q.all()
-    except ValueError as e:
-        print("Error: " + str(e))
-        return
-    if not result:
-        print("Tidak ada hasil.")
-        return
-    rows = []
-    for r in result:
-        if isinstance(r, dict):
-            row = {"id": r["id"][:8]}
-            row.update(r["data"])
-            rows.append(row)
-        else:
-            row = {"id": r.id[:8]}
-            row.update(r.data)
-            rows.append(row)
-    print(str(len(rows)) + " hasil:")
-    print()
-    print_table(rows)
-
-
-def cmd_sort(db, args):
-    if len(args) < 2:
-        print("Usage: sort <col> <field> [desc]")
-        return
-    coll, field = args[0], args[1]
-    desc = len(args) > 2 and args[2].lower() == "desc"
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    result = db.collection(coll).query().order_by(
-        field, desc=desc
-    ).all()
-    rows = []
-    for r in result:
-        if isinstance(r, dict):
-            row = {"id": r["id"][:8]}
-            row.update(r["data"])
-            rows.append(row)
-        else:
-            row = {"id": r.id[:8]}
-            row.update(r.data)
-            rows.append(row)
-    print_table(rows)
-
-
-def cmd_search(db, args):
-    if len(args) < 2:
-        print("Usage: search <col> <keyword>")
-        return
-    coll = args[0]
-    keyword = " ".join(args[1:])
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    result = db.collection(coll).search(keyword)
-    if not result:
-        print("Tidak ada hasil.")
-        return
-    rows = records_to_rows(result)
-    print(str(len(result)) + " hasil:")
-    print()
-    print_table(rows)
-
-
-def cmd_avg(db, args):
-    _agg(db, args, "avg")
-
-
-def cmd_sum(db, args):
-    _agg(db, args, "sum")
-
-
-def cmd_min(db, args):
-    _agg(db, args, "min")
-
-
-def cmd_max(db, args):
-    _agg(db, args, "max")
-
-
-def _agg(db, args, op):
-    if len(args) < 2:
-        print("Usage: " + op + " <col> <field>")
-        return
-    coll, field = args[0], args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    val = db.collection(coll).aggregate(field, op)
     print_table(
-        [{"koleksi": coll, "field": field, op: val}],
-        headers=["koleksi", "field", op],
+        [{"koleksi": a[0], "jumlah": db.collection(a[0]).count()}],
+        headers=["koleksi", "jumlah"],
     )
 
 
-def cmd_group(db, args):
-    if len(args) < 2:
-        print("Usage: group <col> <field>")
+def cmd_filter(db, a):
+    if len(a) < 4:
+        print("  Usage: filter <col> <field> <op> <value>")
         return
-    coll, field = args[0], args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
+    coll, field, op = a[0], a[1], a[2]
+    value = auto_cast(" ".join(a[3:]))
+    try:
+        result = db.collection(coll).query().where(field, op, value).all()
+    except Exception as e:
+        print("  Error: " + str(e))
         return
-    result = db.collection(coll).group_by(field)
-    rows = [
-        {field: k, "jumlah": v}
-        for k, v in sorted(
-            result.items(), key=lambda x: x[1], reverse=True
-        )
-    ]
-    print_table(rows, headers=[field, "jumlah"])
-
-
-def cmd_distinct(db, args):
-    if len(args) < 2:
-        print("Usage: distinct <col> <field>")
-        return
-    coll, field = args[0], args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    values = db.collection(coll).distinct(field)
-    print("Nilai unik (" + str(len(values)) + "):")
-    for v in values:
-        print("  - " + str(v))
-
-
-# ============================================================
-# COMMANDS: INDEX
-# ============================================================
-
-def cmd_index(db, args):
-    if len(args) < 2:
-        print("Usage: index <col> <field>")
-        return
-    coll, field = args[0], args[1]
-    db.collection(coll).create_index(field)
-    print("Hash index dibuat di '" + coll + "." + field + "'.")
-
-
-def cmd_sorted_index(db, args):
-    if len(args) < 2:
-        print("Usage: sorted-index <col> <field>")
-        return
-    coll, field = args[0], args[1]
-    db.collection(coll).create_sorted_index(field)
-    print("B+ Tree dibuat di '" + coll + "." + field + "'.")
-
-
-def cmd_indexes(db, args):
-    if not args:
-        print("Usage: indexes <col>")
-        return
-    coll = args[0]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    h = db.collection(coll).indexes()
-    b = db.collection(coll).sorted_indexes()
-    print("Hash indexes : " + str(h))
-    print("B+ Tree      : " + str(b))
-
-
-def cmd_drop_index(db, args):
-    if len(args) < 2:
-        print("Usage: drop-index <col> <field>")
-        return
-    coll, field = args[0], args[1]
-    ok = db.collection(coll).drop_index(field)
-    print("Hapus: " + str(ok))
-
-
-def cmd_range(db, args):
-    if len(args) < 4:
-        print("Usage: range <col> <field> <start> <end>")
-        return
-    coll, field = args[0], args[1]
-    start = auto_cast(args[2])
-    end = auto_cast(args[3])
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    result = db.collection(coll).range(field, start, end)
     if not result:
-        print("Tidak ada hasil.")
+        print("  Tidak ada hasil.")
         return
-    rows = records_to_rows(result)
-    print(str(len(rows)) + " hasil range:")
-    print()
+    rows = []
+    for r in result:
+        if isinstance(r, dict):
+            row = {"id": r["id"][:8]}
+            row.update(r["data"])
+            rows.append(row)
+        else:
+            row = {"id": r.id[:8]}
+            row.update(r.data)
+            rows.append(row)
     print_table(rows)
 
 
-# ============================================================
-# COMMANDS: TIME TRAVEL
-# ============================================================
+def cmd_sort(db, a):
+    if len(a) < 2:
+        print("  Usage: sort <col> <field> [desc]")
+        return
+    desc = len(a) > 2 and a[2].lower() == "desc"
+    result = db.collection(a[0]).query().order_by(a[1], desc=desc).all()
+    rows = []
+    for r in result:
+        if isinstance(r, dict):
+            row = {"id": r["id"][:8]}
+            row.update(r["data"])
+            rows.append(row)
+        else:
+            row = {"id": r.id[:8]}
+            row.update(r.data)
+            rows.append(row)
+    print_table(rows)
 
-def cmd_history(db, args):
-    if len(args) < 2:
-        print("Usage: history <col> <id>")
+
+def cmd_search(db, a):
+    if len(a) < 2:
+        print("  Usage: search <col> <keyword>")
         return
-    coll, rid = args[0], args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
+    result = db.collection(a[0]).search(" ".join(a[1:]))
+    if not result:
+        print("  Tidak ada hasil.")
         return
-    h = db.collection(coll).history(rid)
+    print_table(records_to_rows(result))
+
+
+def _agg(db, a, op):
+    if len(a) < 2:
+        print("  Usage: " + op + " <col> <field>")
+        return
+    val = db.collection(a[0]).aggregate(a[1], op)
+    print_table([{"koleksi": a[0], "field": a[1], op: val}],
+                headers=["koleksi", "field", op])
+
+
+def cmd_avg(db, a):
+    _agg(db, a, "avg")
+
+
+def cmd_sum(db, a):
+    _agg(db, a, "sum")
+
+
+def cmd_min(db, a):
+    _agg(db, a, "min")
+
+
+def cmd_max(db, a):
+    _agg(db, a, "max")
+
+
+def cmd_group(db, a):
+    if len(a) < 2:
+        print("  Usage: group <col> <field>")
+        return
+    result = db.collection(a[0]).group_by(a[1])
+    rows = [{a[1]: k, "jumlah": v}
+            for k, v in sorted(result.items(), key=lambda x: x[1], reverse=True)]
+    print_table(rows, headers=[a[1], "jumlah"])
+
+
+def cmd_distinct(db, a):
+    if len(a) < 2:
+        print("  Usage: distinct <col> <field>")
+        return
+    values = db.collection(a[0]).distinct(a[1])
+    print("  Nilai unik (" + str(len(values)) + "):")
+    for v in values:
+        print("    - " + str(v))
+
+
+def cmd_index(db, a):
+    if len(a) < 2:
+        print("  Usage: index <col> <field>")
+        return
+    db.collection(a[0]).create_index(a[1])
+    print("  Hash index dibuat.")
+
+
+def cmd_sorted_index(db, a):
+    if len(a) < 2:
+        print("  Usage: sorted-index <col> <field>")
+        return
+    db.collection(a[0]).create_sorted_index(a[1])
+    print("  B+ Tree dibuat.")
+
+
+def cmd_indexes(db, a):
+    if not a:
+        print("  Usage: indexes <col>")
+        return
+    h = db.collection(a[0]).indexes()
+    b = db.collection(a[0]).sorted_indexes()
+    print("  Hash : " + str(h))
+    print("  BTree: " + str(b))
+
+
+def cmd_drop_index(db, a):
+    if len(a) < 2:
+        print("  Usage: drop-index <col> <field>")
+        return
+    ok = db.collection(a[0]).drop_index(a[1])
+    print("  Hapus: " + str(ok))
+
+
+def cmd_range(db, a):
+    if len(a) < 4:
+        print("  Usage: range <col> <field> <a> <b>")
+        return
+    result = db.collection(a[0]).range(a[1], auto_cast(a[2]), auto_cast(a[3]))
+    if not result:
+        print("  Tidak ada.")
+        return
+    print_table(records_to_rows(result))
+
+
+def cmd_history(db, a):
+    if len(a) < 2:
+        print("  Usage: history <col> <id>")
+        return
+    h = db.collection(a[0]).history(a[1])
     if not h:
-        print("Tidak ada history.")
+        print("  Kosong.")
         return
-    print(str(len(h)) + " versi:")
-    print()
-    for i, v in enumerate(h, 1):
-        t = time.strftime(
-            "%Y-%m-%d %H:%M:%S",
-            time.localtime(v["at"])
-        )
-        print("  v" + str(v["version"]) + " | " + t +
-              " | " + str(v["data"]))
+    for v in h:
+        t = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(v["at"]))
+        print("  v" + str(v["version"]) + " | " + t + " | " + str(v["data"]))
 
 
-def cmd_at(db, args):
-    if len(args) < 2:
-        print("Usage: at <col> <timestamp>")
-        print("  Timestamp: unix (1699999999) atau 'YYYY-MM-DD'")
-        return
-    coll = args[0]
-    ts = args[1]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
+def cmd_at(db, a):
+    if len(a) < 2:
+        print("  Usage: at <col> <timestamp>")
         return
     try:
-        if ts.replace(".", "").isdigit():
-            ts_val = float(ts)
-        else:
-            t = time.strptime(ts, "%Y-%m-%d")
-            ts_val = time.mktime(t)
+        ts = float(a[1]) if a[1].replace(".", "").isdigit()             else time.mktime(time.strptime(a[1], "%Y-%m-%d"))
     except Exception:
-        print("Format waktu salah.")
+        print("  Format waktu salah.")
         return
-    snap = db.collection(coll).at(ts_val).all()
+    snap = db.collection(a[0]).at(ts).all()
     if not snap:
-        print("Tidak ada data di waktu itu.")
+        print("  Kosong.")
         return
-    print(str(len(snap)) + " record di waktu " + ts + ":")
-    print()
     for r in snap:
         print("  " + str(r))
 
 
-def cmd_diff(db, args):
-    if len(args) < 4:
-        print("Usage: diff <col> <id> <v1> <v2>")
+def cmd_diff(db, a):
+    if len(a) < 4:
+        print("  Usage: diff <col> <id> <v1> <v2>")
         return
-    coll, rid = args[0], args[1]
-    v1, v2 = int(args[2]), int(args[3])
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    diff = db.collection(coll).diff(rid, v1, v2)
+    diff = db.collection(a[0]).diff(a[1], int(a[2]), int(a[3]))
     if not diff:
-        print("Tidak ada perbedaan atau versi salah.")
+        print("  Tidak ada diff.")
         return
-    print("Perbedaan v" + str(v1) + " → v" + str(v2) + ":")
-    for k, (a, b) in diff.items():
-        print("  " + k + ": " + str(a) + " → " + str(b))
+    for k, (x, y) in diff.items():
+        print("  " + k + ": " + str(x) + " -> " + str(y))
 
 
-def cmd_restore(db, args):
-    if len(args) < 3:
-        print("Usage: restore <col> <id> <version>")
+def cmd_restore(db, a):
+    if len(a) < 3:
+        print("  Usage: restore <col> <id> <v>")
         return
-    coll, rid = args[0], args[1]
-    ver = int(args[2])
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    rec = db.collection(coll).restore_version(rid, ver)
-    if rec:
-        print("Restored ke v" + str(ver) + ": " + str(rec.data))
-    else:
-        print("Gagal restore.")
+    rec = db.collection(a[0]).restore_version(a[1], int(a[2]))
+    print("  OK: " + str(rec.data) if rec else "  Gagal.")
 
 
-# ============================================================
-# COMMANDS: JOIN
-# ============================================================
-
-def cmd_join(db, args):
-    if len(args) < 4:
-        print("Usage: join <col1> <col2> <key1> <key2> [inner|left|right]")
+def cmd_join(db, a):
+    if len(a) < 4:
+        print("  Usage: join <c1> <c2> <k1> <k2> [type]")
         return
-    c1, c2, k1, k2 = args[0], args[1], args[2], args[3]
-    jt = args[4] if len(args) > 4 else "left"
-    if not db.has_collection(c1) or not db.has_collection(c2):
-        print("Salah satu koleksi tidak ada.")
-        return
+    jt = a[4] if len(a) > 4 else "left"
     try:
-        result = db.collection(c1).join(
-            c2, on=(k1, k2), join_type=jt
-        ).all()
+        result = db.collection(a[0]).join(
+            a[1], on=(a[2], a[3]), join_type=jt).all()
     except Exception as e:
-        print("Error: " + str(e))
+        print("  Error: " + str(e))
         return
     if not result:
-        print("Tidak ada hasil.")
+        print("  Kosong.")
         return
-    print(str(len(result)) + " baris hasil JOIN (" + jt + "):")
-    print()
     for row in result:
-        left = row["_joined"].get(c1)
-        right = row["_joined"].get(c2, [])
-        ldata = left["data"] if isinstance(left, dict) else {}
-        print("  " + str(ldata))
-        if isinstance(right, list):
-            for r in right:
-                print("    → " + str(r.get("data", {})))
+        left = row["_joined"].get(a[0])
+        right = row["_joined"].get(a[1], [])
+        print("  " + str(left["data"] if isinstance(left, dict) else {}))
+        for r in right:
+            print("    -> " + str(r.get("data", {})))
 
 
-# ============================================================
-# COMMANDS: SQL
-# ============================================================
-
-def cmd_sql(db, args):
-    if not args:
-        print("Usage: sql <query>")
-        print("  Contoh: sql SELECT * FROM users WHERE umur > 25")
+def cmd_sql(db, a):
+    if not a:
+        print("  Usage: sql <query>")
         return
-    query = " ".join(args)
     try:
-        result = db.execute(query)
+        result = db.execute(a[0] if len(a) == 1 else " ".join(a))
     except Exception as e:
-        print("SQL error: " + str(e))
+        print("  SQL error: " + str(e))
         return
-
     rows = result.get("rows", [])
     if not rows:
-        # Mungkin non-SELECT
         for k, v in result.items():
             print("  " + k + ": " + str(v))
         return
     print_table(rows)
 
 
-def cmd_explain(db, args):
-    if not args:
-        print("Usage: explain <sql>")
+def cmd_explain(db, a):
+    if not a:
+        print("  Usage: explain <sql>")
         return
-    query = " ".join(args)
     try:
-        result = db.execute("EXPLAIN " + query)
-        print(result.get("explain", "No plan"))
+        r = db.execute("EXPLAIN " + (a[0] if len(a) == 1 else " ".join(a)))
+        print(r.get("explain", "No plan"))
     except Exception as e:
-        print("Error: " + str(e))
+        print("  Error: " + str(e))
 
 
-def cmd_analyze(db, args):
-    if not args:
-        print("Usage: analyze <col>")
+def cmd_analyze(db, a):
+    if not a:
+        print("  Usage: analyze <col>")
         return
-    coll = args[0]
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    stats = db.collection(coll).analyze()
+    stats = db.collection(a[0]).analyze()
     for field, s in stats.items():
         print("  " + field + ": distinct=" + str(s["distinct"]) +
-              " selectivity=" + str(round(s["selectivity"], 3)))
+            " selectivity=" + str(round(s["selectivity"], 3)))
 
 
-# ============================================================
-# COMMANDS: I/O
-# ============================================================
-
-def cmd_export(db, args):
-    if len(args) < 2:
-        print("Usage: export <col> <json|csv> [file]")
+def cmd_export(db, a):
+    if len(a) < 2:
+        print("  Usage: export <col> json|csv [file]")
         return
-    coll, fmt = args[0], args[1].lower()
-    path = args[2] if len(args) > 2 else None
-    if not db.has_collection(coll):
-        print("Koleksi tidak ada.")
-        return
-    if fmt == "json":
-        text = db.collection(coll).export_json(path)
-    elif fmt == "csv":
-        text = db.collection(coll).export_csv(path)
+    path = a[2] if len(a) > 2 else None
+    if a[1].lower() == "json":
+        text = db.collection(a[0]).export_json(path)
+    elif a[1].lower() == "csv":
+        text = db.collection(a[0]).export_csv(path)
     else:
-        print("Format harus json atau csv.")
+        print("  Format harus json/csv.")
         return
-    if path:
-        print("Export ke: " + path)
-    else:
-        print(text[:500])
+    print("  Export ke: " + path if path else text[:500])
 
 
-def cmd_import(db, args):
-    if len(args) < 2:
-        print("Usage: import <col> <json-array>")
-        return
-    coll = args[0]
-    raw = " ".join(args[1:])
-    try:
-        n = db.collection(coll).import_json(raw)
-        print("Imported " + str(n) + " records.")
-    except Exception as e:
-        print("Error: " + str(e))
-
-
-def cmd_backup(db, args):
-    if not args:
-        print("Usage: backup <dir>")
+def cmd_import(db, a):
+    if len(a) < 2:
+        print("  Usage: import <col> <json>")
         return
     try:
-        n = db.backup_all(args[0])
-        print("Backup " + str(n) + " koleksi ke '" + args[0] + "'.")
+        n = db.collection(a[0]).import_json(a[1])
+        print("  Imported " + str(n) + ".")
     except Exception as e:
-        print("Error: " + str(e))
+        print("  Error: " + str(e))
 
 
-def cmd_snapshot(db, args):
-    try:
-        db.snapshot()
-        print("Snapshot selesai.")
-    except Exception as e:
-        print("Error: " + str(e))
+def cmd_backup(db, a):
+    if not a:
+        print("  Usage: backup <dir>")
+        return
+    n = db.backup_all(a[0])
+    print("  Backup " + str(n) + " koleksi.")
 
 
-# ============================================================
-# COMMANDS: MONITOR
-# ============================================================
+def cmd_snapshot(db, a):
+    db.snapshot()
+    print("  Snapshot selesai.")
 
-def cmd_status(db, args):
+
+def cmd_status(db, a):
     s = db.stats()
     rows = [
-        {"item": "Koleksi", "nilai": s["collections"]},
-        {"item": "Total records", "nilai": s["total_records"]},
-        {"item": "Reads", "nilai": s["reads"]},
-        {"item": "Writes", "nilai": s["writes"]},
-        {"item": "Deletes", "nilai": s["deletes"]},
-        {"item": "Snapshot", "nilai": str(s["snapshot_bytes"]) + " B"},
-        {"item": "WAL", "nilai": str(s["wal_bytes"]) + " B"},
-        {"item": "Uptime", "nilai": str(s["uptime_sec"]) + " s"},
-        {"item": "Storage", "nilai": s.get("storage_format", "-")},
+        {"item": "Collections", "value": s["collections"]},
+        {"item": "Total records", "value": s["total_records"]},
+        {"item": "Reads", "value": s["reads"]},
+        {"item": "Writes", "value": s["writes"]},
+        {"item": "Snapshot", "value": str(s["snapshot_bytes"]) + " B"},
+        {"item": "WAL", "value": str(s["wal_bytes"]) + " B"},
+        {"item": "Uptime", "value": str(s["uptime_sec"]) + " s"},
     ]
-    print_table(rows, headers=["item", "nilai"])
+    print_table(rows, headers=["item", "value"])
 
 
-def cmd_stats(db, args):
-    cmd_status(db, args)
-
-
-def cmd_metrics(db, args):
+def cmd_metrics(db, a):
     try:
         from rayzorgendb.metrics.collector import GLOBAL
-        s = GLOBAL.summary()
-        print("Metrics:")
-        for k, v in s.items():
+        for k, v in GLOBAL.summary().items():
             print("  " + k + ": " + str(v))
     except Exception as e:
-        print("Error: " + str(e))
+        print("  Error: " + str(e))
 
 
-def cmd_query_history(db, args):
+def cmd_query_history(db, a):
+    h = db.query_history(20)
+    if not h:
+        print("  (kosong)")
+        return
+    for q in h:
+        print("  " + q["query"][:60] + " | " + str(q["duration_ms"]) + " ms")
+
+
+def cmd_slow(db, a):
+    s = db.slow_queries(20)
+    if not s:
+        print("  (tidak ada)")
+        return
+    for q in s:
+        print("  " + q["query"][:60] + " | " + str(q["duration_ms"]) + " ms")
+
+
+def cmd_cdc(db, a):
     try:
-        h = db.query_history(20)
-        if not h:
-            print("(kosong)")
-            return
-        for q in h:
-            print("  " + q["query"][:60] +
-                  " | " + str(q["duration_ms"]) + " ms")
-    except Exception as e:
-        print("Error: " + str(e))
-
-
-def cmd_slow(db, args):
-    try:
-        s = db.slow_queries(20)
-        if not s:
-            print("(tidak ada query lambat)")
-            return
-        for q in s:
-            print("  " + q["query"][:60] +
-                  " | " + str(q["duration_ms"]) + " ms")
-    except Exception as e:
-        print("Error: " + str(e))
-
-
-# ============================================================
-# COMMANDS: CDC & TIMESERIES
-# ============================================================
-
-def cmd_cdc(db, args):
-    try:
-        cdc = db.cdc()
-        events = cdc.recent(20)
+        events = db.cdc().recent(20)
         if not events:
-            print("(belum ada event)")
+            print("  (kosong)")
             return
         for e in events:
-            t = time.strftime(
-                "%H:%M:%S", time.localtime(e["at"])
-            )
-            print("  " + t + " " + e["op"].ljust(8) +
-                  e["collection"] + "/" +
-                  e["record_id"][:8])
+            t = time.strftime("%H:%M:%S", time.localtime(e["at"]))
+            print("  " + t + " " + e["op"] + " " +
+                e["collection"] + "/" + e["record_id"][:8])
     except Exception as e:
-        print("Error: " + str(e))
+        print("  Error: " + str(e))
 
 
-def cmd_ts_write(db, args):
-    if len(args) < 2:
-        print("Usage: ts-write <metric> <value>")
+def cmd_ts_write(db, a):
+    if len(a) < 2:
+        print("  Usage: ts-write <metric> <value>")
         return
-    metric = args[0]
     try:
-        value = float(args[1])
+        db.timeseries().write(a[0], float(a[1]))
+        print("  OK")
     except ValueError:
-        print("Value harus angka.")
+        print("  Value harus angka.")
+
+
+def cmd_ts_avg(db, a):
+    if not a:
+        print("  Usage: ts-avg <metric> [last]")
         return
-    db.timeseries().write(metric, value)
-    print("Ditulis: " + metric + " = " + str(value))
+    last = a[1] if len(a) > 1 else None
+    print("  avg = " + str(db.timeseries().avg(a[0], last=last)))
 
 
-def cmd_ts_avg(db, args):
-    if not args:
-        print("Usage: ts-avg <metric> [last]")
+def cmd_ts_query(db, a):
+    if not a:
+        print("  Usage: ts-query <metric> [last]")
         return
-    metric = args[0]
-    last = args[1] if len(args) > 1 else None
-    try:
-        v = db.timeseries().avg(metric, last=last)
-        print("avg(" + metric + ") = " + str(v))
-    except Exception as e:
-        print("Error: " + str(e))
+    last = a[1] if len(a) > 1 else None
+    points = db.timeseries().query(a[0], last=last)
+    for ts, v in points[-20:]:
+        print("  " + time.strftime("%H:%M:%S", time.localtime(ts)) +
+            " " + str(v))
 
 
-def cmd_ts_query(db, args):
-    if not args:
-        print("Usage: ts-query <metric> [last]")
-        return
-    metric = args[0]
-    last = args[1] if len(args) > 1 else None
-    try:
-        points = db.timeseries().query(metric, last=last)
-        if not points:
-            print("(kosong)")
-            return
-        print(str(len(points)) + " points:")
-        for ts, v in points[-20:]:
-            t = time.strftime("%H:%M:%S", time.localtime(ts))
-            print("  " + t + " " + str(v))
-    except Exception as e:
-        print("Error: " + str(e))
-
-
-# ============================================================
-# COMMANDS: SYSTEM
-# ============================================================
-
-def cmd_clear(db, args):
+def cmd_clear(db, a):
     cols = db.collections()
-    if not cols:
-        print("Sudah kosong.")
-        return
     for c in cols:
         db.drop_collection(c)
-    print(str(len(cols)) + " koleksi dihapus.")
+    print("  " + str(len(cols)) + " koleksi dihapus.")
+
+
+def cmd_changepw(db, a):
+    try:
+        old = getpass.getpass("  Password lama: ")
+        new = getpass.getpass("  Password baru: ")
+        confirm = getpass.getpass("  Konfirmasi: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+    if new != confirm:
+        print("  Password tidak cocok.")
+        return
+    if change_password(old, new):
+        print("  Password berhasil diubah.")
+    else:
+        print("  Gagal. Cek password lama atau minimal 4 karakter.")
+
+
+def cmd_logout(db, a):
+    raise SystemExit(0)
 
 
 # ============================================================
-# MAIN
+# Main
 # ============================================================
 
 def main():
-    print()
-    print("======================================================")
-    print("       RayzorgenDB Shell - Extended")
-    print("======================================================")
-    print()
-    print("Ketik 'help' untuk lihat semua perintah.")
-    print("Ketik 'exit' untuk keluar.")
-    print()
+    # Cek akun
+    if is_first_time():
+        run_setup()
+        return
+
+    # Login
+    if not run_login():
+        return
+
+    # Welcome
+    clear()
+    print_welcome()
 
     db = RayzorgenDB()
 
     commands = {
-        # Collections
         "create": cmd_create,
         "drop": cmd_drop,
         "collections": cmd_collections,
-        # Data
         "insert": cmd_insert,
         "insertmany": cmd_insertmany,
         "show": cmd_show,
@@ -979,7 +875,6 @@ def main():
         "remove": cmd_remove,
         "delete": cmd_remove,
         "count": cmd_count,
-        # Query
         "filter": cmd_filter,
         "sort": cmd_sort,
         "search": cmd_search,
@@ -989,41 +884,35 @@ def main():
         "max": cmd_max,
         "group": cmd_group,
         "distinct": cmd_distinct,
-        # Index
         "index": cmd_index,
         "sorted-index": cmd_sorted_index,
         "indexes": cmd_indexes,
         "drop-index": cmd_drop_index,
         "range": cmd_range,
-        # Time Travel
         "history": cmd_history,
         "at": cmd_at,
         "diff": cmd_diff,
         "restore": cmd_restore,
-        # Join
         "join": cmd_join,
-        # SQL
         "sql": cmd_sql,
         "explain": cmd_explain,
         "analyze": cmd_analyze,
-        # I/O
         "export": cmd_export,
         "import": cmd_import,
         "backup": cmd_backup,
         "snapshot": cmd_snapshot,
-        # Monitor
         "status": cmd_status,
-        "stats": cmd_stats,
+        "stats": cmd_status,
         "metrics": cmd_metrics,
         "query-history": cmd_query_history,
         "slow": cmd_slow,
-        # CDC & TS
         "cdc": cmd_cdc,
         "ts-write": cmd_ts_write,
         "ts-avg": cmd_ts_avg,
         "ts-query": cmd_ts_query,
-        # System
         "clear": cmd_clear,
+        "changepw": cmd_changepw,
+        "logout": cmd_logout,
         "help": lambda db, a: print_help(),
         "bantuan": lambda db, a: print_help(),
     }
@@ -1034,46 +923,41 @@ def main():
                 line = input("rayzorgen> ").strip()
             except EOFError:
                 break
-
             if not line:
                 continue
 
-            # Split by first space, sisanya utuh
-            if " " in line:
-                cmd, rest = line.split(" ", 1)
-                args = rest.split()
-                # Reassemble untuk argumen panjang (SQL, JSON)
-                if cmd in ("sql", "explain"):
-                    args = [rest]
-                elif cmd == "insertmany":
-                    args = rest.split(" ", 1)
-                elif cmd in ("insert", "update", "import"):
-                    args = rest.split(" ", 1)
-            else:
-                cmd = line
-                args = []
-
-            cmd = cmd.lower()
+            parts = line.split(" ", 1)
+            cmd = parts[0].lower()
+            rest = parts[1] if len(parts) > 1 else ""
 
             if cmd in ("exit", "quit", "keluar"):
-                print("Sampai jumpa.")
                 break
 
             if cmd in commands:
+                if cmd in ("sql", "explain"):
+                    args = [rest] if rest else []
+                elif cmd in ("insert", "update", "import", "insertmany"):
+                    sub = rest.split(" ", 1)
+                    args = sub if rest else []
+                else:
+                    args = rest.split() if rest else []
                 try:
-                    # Konversi string tunggal ke list
-                    if isinstance(args, str):
-                        args = [args]
                     commands[cmd](db, args)
+                except SystemExit:
+                    raise
                 except Exception as e:
-                    print("Error: " + str(e))
+                    print("  Error: " + str(e))
             else:
-                print("Perintah tidak dikenal: '" + cmd + "'")
-                print("Ketik 'help' untuk bantuan.")
+                print("  Perintah tidak dikenal: '" + cmd + "'")
+                print("  Ketik 'help' untuk bantuan.")
     finally:
         db.close()
-        print("Data tersimpan.")
+        print_goodbye()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        print_goodbye()
