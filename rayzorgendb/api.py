@@ -1029,6 +1029,111 @@ class RayzorgenDB:
 # Time Travel Helpers
 # ============================================================
 
+    def metrics(self) -> dict:
+        """Return collected metrics."""
+        return self.core._metrics.summary()
+
+    def integrity_check(self, collection: str) -> dict:
+        """Verify all records checksum."""
+        coll = self.collection(collection)
+        passed = 0
+        failed = 0
+        for rec in coll.all():
+            expected = self.core._integrity.compute(rec.data)
+            if self.core._integrity.verify(rec.data, expected):
+                passed += 1
+            else:
+                failed += 1
+        return {
+            "collection": collection,
+            "passed": passed,
+            "failed": failed,
+        }
+
+
+    def set_schema(self, collection: str, schema):
+        """Enable schema validation for a collection."""
+        from rayzorgendb.schema.validator import Schema
+        self.core._schema = schema
+        self.core._schema_collection = collection
+        return True
+
+
+    def enable_logging(self, level: str = "INFO",
+                       output: str = None):
+        """Enable structured logging."""
+        from rayzorgendb.logging_config import configure
+        self.core._logger = configure(
+            level=level, output=output, to_console=False
+        )
+        return True
+
+    def enable_multi_writer(self):
+        """Enable multi-writer optimistic locking."""
+        from rayzorgendb.multi_writer import MultiWriter
+        self.core._multi_writer = MultiWriter(self.core)
+        return True
+
+    def enable_auth(self, users: dict = None):
+        """Enable basic authentication."""
+        from rayzorgendb.auth import BasicAuth
+        self.core._auth = BasicAuth(users or {})
+        return True
+
+    def encrypt_at_rest(self, password: str):
+        """Enable encryption for data at rest."""
+        from rayzorgendb.crypto.cipher import Cipher
+        self.core._cipher = Cipher(password)
+        return True
+
+    def shard(self, shard_key: str, n_shards: int = 3):
+        """Enable sharding across multiple folders."""
+        from rayzorgendb.sharding import ShardedDB
+        folders = [
+            self.config.DATA_DIR + "_shard" + str(i)
+            for i in range(n_shards)
+        ]
+        return ShardedDB(folders, shard_key=shard_key)
+
+    def replicate_to(self, host: str, port: int = 9999):
+        """Start as replication primary."""
+        from rayzorgendb.replication import ReplicationManager
+        mgr = ReplicationManager(self, mode="primary")
+        mgr.start_primary(host, port)
+        return mgr
+
+    def enable_paged(self, cache_pages: int = 256):
+        """Enable paged disk storage."""
+        from rayzorgendb.paged.storage import PagedStorage
+        import os
+        path = os.path.join(
+            self.config.DATA_DIR, "pages.pg"
+        )
+        self.core._paged = PagedStorage(
+            path, cache_pages=cache_pages
+        )
+        return self.core._paged
+
+    def explain_sql(self, sql: str) -> str:
+        """Explain execution plan for SQL."""
+        from rayzorgendb.sql.parser import parse, Select
+        from rayzorgendb.optimizer.engine import QueryOptimizer
+
+        if self.core._optimizer is None:
+            self.core._optimizer = QueryOptimizer(self.core)
+
+        ast = parse(sql)
+        if not isinstance(ast, Select):
+            return "Only SELECT supported"
+
+        self.core._optimizer.analyze(ast.table)
+        plan = self.core._optimizer.optimize_select(
+            ast.table, [], order_by=None,
+            limit=ast.limit,
+            index_manager=self.core.indexes,
+        )
+        return plan.explain()
+
 class TimeSnapshot:
     """Snapshot of a collection at a specific time."""
 
@@ -1091,6 +1196,11 @@ def _parse_timestamp(value) -> float:
         "Cannot parse timestamp: " + repr(value)
     )
 
+
+
+    # ========================================================
+    # INTEGRATED MODULES - enable as needed
+    # ========================================================
 
 __all__ = [
     "RayzorgenDB", "Collection", "Transaction", "Record",

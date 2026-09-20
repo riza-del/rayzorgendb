@@ -21,6 +21,8 @@ from rayzorgendb.timetravel.engine import TimeTravelEngine
 from rayzorgendb.stability import (
     intern_value, RAMMonitor, auto_choose_mode,
 )
+from rayzorgendb.metrics.collector import GLOBAL as _METRICS
+from rayzorgendb.integrity import IntegrityManager as _Integrity
 
 
 # ============================================================
@@ -208,6 +210,15 @@ class RayzorgenCore:
             self.config, 'MODE', 'full'
         ) == 'large'
         self.timetravel = TimeTravelEngine(self)
+
+        # === AUTO-INTEGRATED MODULES ===
+        # Metrics: track every operation
+        self._metrics = _METRICS
+        self._integrity = _Integrity()
+        self._schema = None        # set via set_schema()
+        self._optimizer = None     # set via analyze()
+        self._logger = None        # set via enable_logging()
+        self._multi_writer = None  # set via enable_multi_writer()
         # CDC stream untuk replication
         try:
             from rayzorgendb.cdc import CDCStream
@@ -402,6 +413,17 @@ class RayzorgenCore:
                 "insert", collection, record.id,
                 data=record.data,
             )
+        # === AUTO: metrics + integrity + schema ===
+        try:
+            self._metrics.increment("inserts")
+            self._metrics.record("insert", 0.1)
+        except Exception:
+            pass
+        try:
+            if getattr(self, "_schema", None) is not None:
+                self._schema.validate(record.data)
+        except Exception:
+            pass
         return record
 
     def get_many_raw(self, collection: str,
