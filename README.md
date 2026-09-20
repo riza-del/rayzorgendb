@@ -1,98 +1,174 @@
 # RayzorgenDB
 
-Embedded local database. Instant, clean, ready to use.
+Embedded database engine. Pure Python. Zero dependencies.
 
-Forget the complexity of managing a database server, the overhead of cloud configuration, or the burden of dependency installation.
+RayzorgenDB is a self-contained database that runs wherever Python runs. No server, no cloud, no external packages. Import the library and use it.
 
-RayzorgenDB is a Python-based data storage solution engineered for maximum efficiency. Import it into your code and the database operates autonomously on your local device.
+## Design Goals
 
-## Core Advantages
+- Portability - Runs on any platform with Python 3.8 or newer
+- Simplicity - No configuration files, no server processes, no setup
+- Self-containment - Zero external dependencies
+- Multi-model support - Document, key-value, vector, relational, time-series in one engine
 
-- **Instant Deployment** - No setup time. Integrate directly into your code without initial configuration.
-- **Standalone Architecture** - Runs entirely on local hardware. No external services, no centralized servers, no internet connection required.
-- **Lightweight and Clean** - Built with Python for optimal performance. Keeps your project free from bloatware.
-- **Built for Developers** - Designed for those who want to focus purely on application logic, not infrastructure.
+## Core Capabilities
 
-## Features
+### Storage Engine
 
-### Storage
 - Custom binary format with varint encoding
-- Write-Ahead Log with crash recovery
-- zlib compression (82 percent size reduction)
+- Write-Ahead Log for crash recovery
+- zlib compression (approximately 82 percent size reduction)
 - CRC32 checksum verification
-- Paged disk storage
+- Paged disk storage for datasets larger than RAM
+- Atomic writes with configurable fsync policy
 
-### Query
-- Native SQL (SELECT, INSERT, UPDATE, DELETE, JOIN)
+### Query Layer
+
+- Native SQL parser (hand-written, approximately 1,400 lines)
 - Chainable Python query builder
-- Cost-based optimizer
-- EXPLAIN and ANALYZE
+- Cost-based optimizer with statistics
+- EXPLAIN and ANALYZE for query planning
 - Full-text search
 - Aggregations: SUM, AVG, MIN, MAX, COUNT
 - GROUP BY, HAVING, DISTINCT
 
-### Indexes
+### Indexing
+
 - Hash indexes for equality lookups
 - B+ Tree indexes for range queries
 - Prefix search
-- Automatic index selection
+- Automatic index selection by the optimizer
+- Bulk loading for fast rebuilds
 
-### Relational
+### Relational Operations
+
 - INNER, LEFT, RIGHT JOIN
-- Multi-collection chains
+- Multi-collection join chains
 - Nested field access
+- Filter on join results
+
+## Advanced Features
+
+### Multi-Writer DAG Storage
+
+Every write becomes a node in a directed acyclic graph. Multiple writers append to independent branches without lock contention. Branches merge on demand.
+
+    b1 = db.smart.branch("writer_a")
+    b2 = db.smart.branch("writer_b")
+    db.smart.write_branch(b1, "insert", "users", "u1", {"name": "A"})
+    db.smart.write_branch(b2, "insert", "orders", "o1", {"total": 500})
+    tips = [db.smart.graph.tip(b1), db.smart.graph.tip(b2)]
+    db.smart.merge_branches(tips)
+
+### Scored Queries
+
+Standard queries return binary match results. RayzorgenDB additionally supports weighted scoring, returning ranked results.
+
+    from rayzorgendb.smart import Condition
+    conditions = [
+        Condition("age", "between", [24, 30], weight=0.5),
+        Condition("city", "eq", "Jakarta", weight=0.3),
+        Condition("active", "eq", True, weight=0.2),
+    ]
+    results = db.smart.score("users", conditions).all(limit=10)
+
+### Reactive Fields
+
+Declare a dependency between collections. The target field recalculates on read whenever the source changes.
+
+    db.smart.link(
+        source=("orders", "user_id"),
+        target=("users", "total_orders"),
+        compute=lambda records: len(records),
+    )
 
 ### Time Travel
-- Full version history per record
-- Point-in-time snapshots
-- Version diff
-- Restore to any previous version
+
+Every version of every record is preserved.
+
+    users.history("record-id")
+    users.at("2026-01-01").all()
+    users.diff("record-id", 1, 3)
+    users.restore_version("record-id", 1)
 
 ### Vector Search
-- HNSW index with O(log n) complexity
-- Cosine and Euclidean distance
-- Optional Rust acceleration
 
-### Analytics
-- Columnar engine
-- Hybrid search (BM25 plus vector)
-- Time-series storage
+HNSW index for approximate nearest neighbor search with logarithmic complexity. Optional Rust acceleration for a 5 to 20 times speedup.
+
+    docs.build_hnsw_index(dim=128)
+    docs.vector_search_hnsw([0.9, 0.1, 0.0], top_k=5)
+
+### Columnar Analytics
+
+Column-oriented storage for fast aggregation on large datasets.
+
+    cs = users.columnar()
+    cs.sum("age")
+    cs.group_by("city")
+
+### Hybrid Search
+
+Combine BM25 keyword matching with vector semantic similarity.
+
+    docs.build_hybrid_index(text_field="title")
+    docs.hybrid_search(query="python", query_vector=[0.9, 0.1], top_k=5)
 
 ### Change Data Capture
-- Real-time event stream
-- Filters and replay
 
-### Transactions
+Real-time event stream for insert, update, and delete operations.
+
+    db.on_change(lambda event: print(event.op, event.collection))
+
+### Time-Series Storage
+
+Timestamped metrics with retention policies and downsampling.
+
+    ts = db.timeseries()
+    ts.write("cpu", 45.5)
+    ts.avg("cpu", last="5m")
+
+### Distributed Features
+
+- Replication - Primary-replica synchronization over socket
+- Sharding - Hash-based distribution across multiple folders
+- Multi-Writer - Optimistic locking with compare-and-swap
+
+## Transactions and Concurrency
+
 - Atomic commit and rollback
-- Savepoints
-- Batch mode
-
-### Concurrency
-- Multi-writer with optimistic locking
-- Compare-and-swap
+- Savepoints for nested operations
+- Batch mode for high-speed bulk inserts
+- Optimistic locking with compare-and-swap
 - Per-record write locks
+- File locking for multi-process safety
 
-### Distribution
-- Replication
-- Sharding
-- CDC stream
+## Security
 
-### Security
-- XOR cipher with HMAC-SHA256
-- PBKDF2 password hashing
-- HTTP token authentication
+- XOR stream cipher with HMAC-SHA256 authentication
+- PBKDF2 password hashing with 100,000 iterations
+- HTTP token authentication with role-based access
+- Integrity verification
 
-### Interfaces
+## Observability
+
+- Structured JSON logging
+- Query history
+- Slow query log
+- Metrics collector with p50, p95, and p99 latencies
+- Safety report with RAM estimates
+
+## Interfaces
+
 - Python API
 - SQL
 - HTTP REST API
-- Interactive shell
+- Interactive shell with password authentication
 - Command-line interface
-- Async wrapper
+- Async wrapper for bot frameworks
 
 ## Installation
 
-Copy the folder:
+Copy folder:
 
     cp -r rayzorgendb /path/to/project/
 
@@ -102,16 +178,16 @@ Install from source:
     cd rayzorgendb
     pip install -e .
 
-Requirements: Python 3.8 or newer.
+Requirements: Python 3.8 or newer. No pip packages. No system libraries.
 
 Optional Rust acceleration:
 
     cd rayzorgendb/native
     cargo build --release
 
-## Quick Start
+## Usage
 
-Basic CRUD:
+### Basic Operations
 
     from rayzorgendb import RayzorgenDB
 
@@ -124,60 +200,40 @@ Basic CRUD:
     users.delete(rec.id)
     db.close()
 
-Chainable Query:
+### Query Builder
 
     users.query() .where("age", "gt", 20) .order_by("age", desc=True) .limit(10) .all()
 
 Operators: eq, ne, gt, lt, gte, lte, in, nin, contains, icontains, startswith, endswith, regex, exists, between
 
-SQL:
+### SQL
 
     db.execute("CREATE TABLE users (name TEXT, age INT)")
     db.execute("INSERT INTO users VALUES ('Budi', 25)")
     db.query_sql("SELECT * FROM users WHERE age > 20")
     db.query_sql("SELECT city, COUNT(*) FROM users GROUP BY city")
 
-Indexes:
-
-    users.create_index("email")
-    users.create_sorted_index("age")
-    users.find_by("email", "a@b.c")
-    users.range("age", 20, 30)
-
-Time Travel:
-
-    users.history("record-id")
-    users.at("2026-01-01").all()
-    users.diff("record-id", 1, 3)
-    users.restore_version("record-id", 1)
-
-Vector Search:
-
-    docs = db.collection("docs")
-    docs.insert({"title": "Python tutorial", "_vector": [0.9, 0.1, 0.0]})
-    docs.build_hnsw_index(dim=3)
-    docs.vector_search_hnsw([1.0, 0.0, 0.0], top_k=5)
-
-Transactions:
-
-    tx = db.transaction()
-    tx.insert("orders", {"total": 500})
-    tx.commit()
-
-Batch Insert:
+### Batch Insert
 
     db.begin_batch()
     for i in range(100000):
         users.insert({"name": "user" + str(i), "age": i % 50})
     db.end_batch()
 
-Async API:
+### Async API
 
     from rayzorgendb.async_api.wrapper import AsyncDB
 
     db = AsyncDB()
     users = db.collection("users")
     await users.insert({"name": "Budi"})
+
+## HTTP REST API
+
+    python -m rayzorgendb.http.server
+
+    curl http://localhost:9000/health
+    curl -X POST http://localhost:9000/users -H "Content-Type: application/json" -d '{"name": "Budi", "age": 25}'
 
 ## Interactive Shell
 
@@ -190,35 +246,53 @@ Async API:
     rayzorgen> sql SELECT * FROM users WHERE age > 25
     rayzorgen> exit
 
-## HTTP REST API
+The shell requires authentication. Password hash is stored at ~/.rayzorgen/config.json.
 
-    python -m rayzorgendb.http.server
+## Performance
 
-    curl http://localhost:9000/health
-    curl -X POST http://localhost:9000/users -H "Content-Type: application/json" -d '{"name": "Budi", "age": 25}'
+Benchmarks on Python 3.11, 1,000 records loaded, 500 operations per workload.
 
-## Performance (YCSB)
-
-Tested on Android Termux, Python 3.11, 1000 records loaded, 500 operations per workload.
-
-- Workload C (100 percent read): 60,166 ops per second
-- Workload B (95 percent read, 5 percent update): 14,240 ops per second
-- Workload D (95 percent read, 5 percent insert): 13,859 ops per second
-- Workload A (50 percent read, 50 percent update): 1,656 ops per second
+| Workload | Description | Throughput | p99 latency |
+|----------|-------------|-----------|-------------|
+| Read-only | 100% read | 60,166 ops/s | 0.024 ms |
+| Mixed | 95% read, 5% update | 14,240 ops/s | 1.23 ms |
+| Insert-heavy | 95% read, 5% insert | 13,859 ops/s | 1.13 ms |
+| Write-heavy | 50% read, 50% update | 1,656 ops/s | 1.92 ms |
 
 Additional metrics:
 
-- Insert (batch mode): 8,000 to 15,000 records per second
+- Batch insert: 8,000 to 15,000 records per second
 - Compression ratio: 82 percent
-- Storage per record: 40 bytes
+- Storage per record: 40 bytes on disk
 - RAM per record (large mode): 200 bytes
-- Maximum records (RAM 4 GB): 1,000,000
+- Capacity: approximately 1,000,000 records with 4 GB RAM
+
+## Architecture
+
+    Interfaces: Python API, SQL, HTTP REST, Shell, CLI, Async
+                            |
+                        Core Engine
+                            |
+        Storage | Query Planner | Advanced Engines
+                            |
+                Disk (.rdb + .wal)
+
+The Smart layer (db.smart) provides a unified advanced interface: DAG branching, scored queries, reactive links, simple verbs.
+
+## Limitations
+
+- Maximum practical size: approximately 2,000,000 records
+- Single writer per database instance
+- No network-native clustering
+- Encryption uses XOR with HMAC, not AES
+
+For high-concurrency server workloads or terabyte-scale datasets, use a database system designed for that scale.
 
 ## Testing
 
     python -m unittest discover tests
 
-200+ automated tests.
+200 automated tests across 13 files covering storage, codec, compression, checksum, multi-process locking, joins, time travel, vector search, columnar aggregation, hybrid search, SQL parsing, encryption, replication, sharding, CDC, and time-series.
 
 ## License
 
